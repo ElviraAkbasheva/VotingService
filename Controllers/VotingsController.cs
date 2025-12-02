@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using VotingService.Data;
 using VotingService.Models;
+using VotingService.Services;
 
 namespace VotingService.Controllers;
 
@@ -10,15 +11,14 @@ namespace VotingService.Controllers;
 public class VotingsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IApartmentServiceClient _apartmentServiceClient;
 
-    public VotingsController(ApplicationDbContext context)
+    public VotingsController(ApplicationDbContext context, IApartmentServiceClient apartmentServiceClient)
     {
         _context = context;
+        _apartmentServiceClient = apartmentServiceClient;
     }
 
-    /// <summary>
-    /// Получить все голосования (с владельцами)
-    /// </summary>
     [HttpGet]
     public async Task<ActionResult<List<Voting>>> GetVotings()
     {
@@ -28,19 +28,48 @@ public class VotingsController : ControllerBase
         return Ok(votings);
     }
 
-    /// <summary>
-    /// Создать новое голосование
-    /// </summary>
     [HttpPost]
-    public async Task<ActionResult<Voting>> CreateVoting(Voting voting)
+    public async Task<ActionResult<Voting>> CreateVoting(CreateVotingRequestDto request)
     {
-        if (voting == null)
+        if (request == null)
             return BadRequest();
 
-        voting.Id = Guid.NewGuid();
-        voting.StartTime = DateTime.UtcNow;
-        // TODO: заменить на передаваемую длительность
-        voting.EndTime = DateTime.UtcNow.AddDays(7);
+        // Создаём пустое голосование
+        var voting = new Voting
+        {
+            Id = Guid.NewGuid(),
+            QuestionPut = request.QuestionPut,
+            ResponseOptions = request.ResponseOptions,
+            StartTime = DateTime.UtcNow,
+            // TODO: заменить на передаваемую длительность
+            EndTime = DateTime.UtcNow.AddDays(7),
+            IsCompleted = false
+        };
+
+        // Для каждого дома получаем квартиры и собственников
+        foreach (var houseId in request.HouseIds)
+        {
+            var apartments = await _apartmentServiceClient.GetApartmentsByHouseIdAsync(houseId);
+
+            foreach (var apartment in apartments)
+            {
+                foreach (var user in apartment.Users)
+                {
+                    var owner = new Owner
+                    {
+                        Id = Guid.NewGuid(), // уникальный ID для записи
+                        UserId = user.UserId,
+                        ApartmentId = apartment.Id,
+                        HouseId = houseId,
+                        ApartmentArea = apartment.TotalArea,
+                        Share = user.Share,
+                        Response = "" // пока не голосовал
+                    };
+                    voting.OwnersList.Add(owner);
+                }
+            }
+        }
+
         _context.Votings.Add(voting);
         await _context.SaveChangesAsync();
 
