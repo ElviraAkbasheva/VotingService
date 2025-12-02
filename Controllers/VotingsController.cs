@@ -79,7 +79,7 @@ public class VotingsController : ControllerBase
     [HttpPost("{id}/vote")]
     public async Task<ActionResult> SubmitVote(Guid id, VoteRequestDto request)
     {
-        // 1. Найти голосование
+        // 1. Найти голосование с владельцами
         var voting = await _context.Votings
             .Include(v => v.OwnersList)
             .FirstOrDefaultAsync(v => v.Id == id);
@@ -108,10 +108,24 @@ public class VotingsController : ControllerBase
             return BadRequest("Пользователь уже проголосовал");
         }
 
-        // 5. Принять голос
+        // 5. Вычислить TotalHouseArea для этого дома (в рамках этого голосования)
+        var totalHouseArea = voting.OwnersList
+            .Where(o => o.HouseId == owner.HouseId) // только из этого дома
+            .Sum(o => o.ApartmentArea);
+
+        if (totalHouseArea == 0)
+        {
+            return BadRequest("Общая площадь дома не может быть нулевой");
+        }
+
+        // 6. Рассчитать вес голоса
+        owner.VoteWeight = (owner.ApartmentArea * owner.Share) / totalHouseArea;
+
+        // 7. Принять голос
         owner.Response = request.Response;
+
         await _context.SaveChangesAsync();
 
-        return Ok("Голос принят");
+        return Ok("Голос принят с весом: " + owner.VoteWeight);
     }
 }

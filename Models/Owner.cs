@@ -11,6 +11,7 @@ public class Owner
     public decimal ApartmentArea { get; set; }
     public decimal Share { get; set; }
     public string Response { get; set; } = string.Empty;
+    public decimal VoteWeight { get; set; }
 
     [JsonIgnore]
     public Voting? Voting { get; set; }
