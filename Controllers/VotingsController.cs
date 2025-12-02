@@ -75,4 +75,43 @@ public class VotingsController : ControllerBase
 
         return CreatedAtAction(nameof(GetVotings), new { id = voting.Id }, voting);
     }
+
+    [HttpPost("{id}/vote")]
+    public async Task<ActionResult> SubmitVote(Guid id, VoteRequestDto request)
+    {
+        // 1. Найти голосование
+        var voting = await _context.Votings
+            .Include(v => v.OwnersList)
+            .FirstOrDefaultAsync(v => v.Id == id);
+
+        if (voting == null)
+            return NotFound("Голосование не найдено");
+
+        // 2. Проверить, активно ли голосование
+        if (voting.IsCompleted || voting.EndTime < DateTime.UtcNow)
+        {
+            return BadRequest("Голосование уже завершено");
+        }
+
+        // 3. Найти владельца с такими UserId и ApartmentId
+        var owner = voting.OwnersList
+            .FirstOrDefault(o => o.UserId == request.UserId && o.ApartmentId == request.ApartmentId);
+
+        if (owner == null)
+        {
+            return BadRequest("Указанный пользователь не является владельцем в этой квартире");
+        }
+
+        // 4. Проверить, что он ещё не голосовал
+        if (!string.IsNullOrEmpty(owner.Response))
+        {
+            return BadRequest("Пользователь уже проголосовал");
+        }
+
+        // 5. Принять голос
+        owner.Response = request.Response;
+        await _context.SaveChangesAsync();
+
+        return Ok("Голос принят");
+    }
 }
