@@ -6,92 +6,60 @@ public class MockApartmentServiceClient : IApartmentServiceClient
 {
     public Task<List<ApartmentResponseDto>> GetApartmentsByHouseIdAsync(long houseId)
     {
-        var apartments = new List<ApartmentResponseDto>
+        var apartments = new List<ApartmentResponseDto>();
+
+        // Для теста: генерируем 5 квартир в каждом доме
+        for (int i = 1; i <= 5; i++)
         {
-            new()
+            var apartmentId = (houseId * 100) + i; // уникальный ID для каждой квартиры
+            var apartmentNumber = i * 10; // например, 10, 20, 30...
+            var totalArea = 50m + (i * 5); // 55, 60, 65, 70, 75
+            var residentialArea = totalArea - 5; // 50, 55, 60...
+
+            var apartment = new ApartmentResponseDto
             {
-                Id = 101,
-                Number = 42,
-                NumbersOfRooms = 2,
-                ResidentialArea = 45.0m,
-                TotalArea = 55.0m,
-                Floor = 5,
-                EntranceNumber = 3,
+                Id = apartmentId,
+                Number = apartmentNumber,
+                NumbersOfRooms = i > 3 ? 3 : 2, // первые 3 — 2-комнатные, остальные — 3-комнатные
+                ResidentialArea = residentialArea,
+                TotalArea = totalArea,
+                Floor = i,
+                EntranceNumber = (i % 2) + 1, // 1 или 2
                 HouseId = houseId,
-                Users = new List<ApartmentUserResponseDto>
-                {
-                    new()
-                    {
-                        UserId = Guid.Parse("f47ac10b-58cc-4372-a567-0e02b2c3d479"),
-                        Share = 1.0m,
-                        UserDetails = new UserDto
-                        {
-                            Id = Guid.Parse("f47ac10b-58cc-4372-a567-0e02b2c3d479"),
-                            FirstName = "Иван",
-                            LastName = "Иванов",
-                            Patronymic = "Иванович",
-                            PhoneNumber = "+79001112233",
-                            Email = "ivan@example.com"
-                        },
-                        Statuses = new List<StatusDto>
-                        {
-                            new() { Id = 1, Name = "Собственник" }
-                        }
-                    }
-                }
-            },
-            new()
+                Users = new List<ApartmentUserResponseDto>()
+            };
+
+            // Добавляем 1 или 2 собственника в квартиру
+            var userCount = i % 3 == 0 ? 2 : 1; // каждая 3-я квартира — 2 собственника
+
+            for (int u = 0; u < userCount; u++)
             {
-                Id = 102,
-                Number = 15,
-                NumbersOfRooms = 3,
-                ResidentialArea = 60.0m,
-                TotalArea = 70.0m,
-                Floor = 2,
-                EntranceNumber = 1,
-                HouseId = houseId,
-                Users = new List<ApartmentUserResponseDto>
+                var userIndex = (int)houseId * 10 + i * 2 + u; // уникальный индекс для GUID
+                var userId = Guid.Parse($"f47ac10b-58cc-4372-a567-{userIndex:D12}".Substring(0, 36).PadRight(36, '0').Replace("0000", $"{userIndex % 10000:D4}"));
+                var share = userCount == 2 ? 0.5m : 1.0m;
+
+                apartment.Users.Add(new ApartmentUserResponseDto
                 {
-                    new()
+                    UserId = userId,
+                    Share = share,
+                    UserDetails = new UserDto
                     {
-                        UserId = Guid.Parse("a1b2c3d4-e5f6-4890-a1b2-c3d4e5f67890"),
-                        Share = 0.5m,
-                        UserDetails = new UserDto
-                        {
-                            Id = Guid.Parse("a1b2c3d4-e5f6-4890-a1b2-c3d4e5f67890"),
-                            FirstName = "Петр",
-                            LastName = "Петров",
-                            Patronymic = "Петрович",
-                            PhoneNumber = "+79002223344",
-                            Email = "petr@example.com"
-                        },
-                        Statuses = new List<StatusDto>
-                        {
-                            new() { Id = 1, Name = "Собственник" },
-                            new() { Id = 2, Name = "Прописан" }
-                        }
+                        Id = userId,
+                        FirstName = $"Имя_{userIndex}",
+                        LastName = $"Фамилия_{userIndex}",
+                        Patronymic = $"Отчество_{userIndex}",
+                        PhoneNumber = $"+7900{userIndex:D6}",
+                        Email = $"user{userIndex}@example.com"
                     },
-                    new()
+                    Statuses = new List<StatusDto>
                     {
-                        UserId = Guid.Parse("b2c3d4e5-f6a7-4901-b2c3-d4e5f6a78901"),
-                        Share = 0.5m,
-                        UserDetails = new UserDto
-                        {
-                            Id = Guid.Parse("b2c3d4e5-f6a7-4901-b2c3-d4e5f6a78901"),
-                            FirstName = "Анна",
-                            LastName = "Сидорова",
-                            Patronymic = "Сергеевна",
-                            PhoneNumber = "+79003334455",
-                            Email = "anna@example.com"
-                        },
-                        Statuses = new List<StatusDto>
-                        {
-                            new() { Id = 1, Name = "Собственник" }
-                        }
+                        new() { Id = 1, Name = "Собственник" }
                     }
-                }
+                });
             }
-        };
+
+            apartments.Add(apartment);
+        }
 
         return Task.FromResult(apartments);
     }

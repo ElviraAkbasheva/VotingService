@@ -128,4 +128,97 @@ public class VotingsController : ControllerBase
 
         return Ok("Голос принят с весом: " + owner.VoteWeight);
     }
+
+    [HttpGet("{id}/results")]
+    public async Task<ActionResult<VotingResultDto>> GetVotingResults(Guid id)
+    {
+        var voting = await _context.Votings
+            .Include(v => v.OwnersList)
+            .FirstOrDefaultAsync(v => v.Id == id);
+
+        if (voting == null)
+            return NotFound("Голосование не найдено");
+
+        // Проверим, завершено ли голосование:
+        // - Или флаг IsCompleted = true
+        // - Или время вышло
+        // - Или все собственники в этом голосовании уже проголосовали
+        bool isCompleted = voting.IsCompleted
+                        || voting.EndTime < DateTime.UtcNow
+                        || voting.OwnersList.All(o => !string.IsNullOrEmpty(o.Response));
+
+        if (!isCompleted)
+        {
+            return BadRequest("Голосование ещё активно, результаты недоступны");
+        }
+
+        // Найти всех, кто проголосовал
+        var votedOwners = voting.OwnersList
+            .Where(o => !string.IsNullOrEmpty(o.Response))
+            .ToList();
+
+        // Подсчитать общий вес проголосовавших
+        var totalVotedWeight = votedOwners.Sum(o => o.VoteWeight);
+
+        // Сгруппировать по вариантам ответа и суммировать вес. Выдать результат в %
+        var responses = votedOwners
+            .GroupBy(o => o.Response)
+            .ToDictionary(
+                g => g.Key,
+                g => totalVotedWeight > 0
+                    ? Math.Round((double)(g.Sum(o => o.VoteWeight) / totalVotedWeight) * 100, 2)
+                    : 0.0
+            );
+
+        // Определить текст решения
+        string decision = string.IsNullOrEmpty(voting.Decision)
+            ? "Решение не опубликовано"
+            : voting.Decision;
+
+        var result = new VotingResultDto
+        {
+            QuestionPut = voting.QuestionPut,
+            TotalVotedWeight = totalVotedWeight,
+            Responses = responses,
+            Decision = decision
+        };
+
+        return Ok(result);
+    }
+
+    [HttpPost("{id}/decision")]
+    public async Task<ActionResult> SetVotingDecision(Guid id, [FromBody] string decision)
+    {
+        // 1. Найти голосование
+        var voting = await _context.Votings
+            .FirstOrDefaultAsync(v => v.Id == id);
+
+        if (voting == null)
+            return NotFound("Голосование не найдено");
+
+        // 2. Проверить, завершено ли голосование
+        // (используем ту же логику, что и в GetVotingResults)
+        bool isCompleted = voting.IsCompleted
+                        || voting.EndTime < DateTime.UtcNow
+                        || voting.OwnersList.All(o => !string.IsNullOrEmpty(o.Response));
+
+        if (!isCompleted)
+        {
+            return BadRequest("Голосование ещё активно, нельзя внести решение");
+        }
+
+        // 3. Проверить, что решение не пустое (опционально)
+        if (string.IsNullOrWhiteSpace(decision))
+        {
+            return BadRequest("Решение не может быть пустым");
+        }
+
+        // 4. Обновить поле Decision
+        voting.Decision = decision;
+
+        // 5. Сохранить изменения
+        await _context.SaveChangesAsync();
+
+        return Ok("Решение внесено");
+    }
 }

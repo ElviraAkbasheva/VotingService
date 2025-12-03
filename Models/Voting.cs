@@ -17,4 +17,7 @@ public class Voting
     public DateTime EndTime { get; set; }
 
     public bool IsCompleted { get; set; }
+
+    // поле для хранения решения комиссии
+    public string? Decision { get; set; }
 }
