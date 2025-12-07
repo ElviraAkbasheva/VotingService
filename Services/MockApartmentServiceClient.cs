@@ -8,8 +8,8 @@ public class MockApartmentServiceClient : IApartmentServiceClient
     {
         var apartments = new List<ApartmentResponseDto>();
 
-        // Для теста: генерируем 5 квартир в каждом доме
-        for (int i = 1; i <= 5; i++)
+        // Для теста: генерируем 3 квартиры в каждом доме
+        for (int i = 1; i <= 3; i++)
         {
             var apartmentId = (houseId * 100) + i; // уникальный ID для каждой квартиры
             var apartmentNumber = i * 10; // например, 10, 20, 30...
@@ -30,7 +30,7 @@ public class MockApartmentServiceClient : IApartmentServiceClient
             };
 
             // Добавляем 1 или 2 собственника в квартиру
-            var userCount = i % 3 == 0 ? 2 : 1; // каждая 3-я квартира — 2 собственника
+            var userCount = i % 2 == 0 ? 2 : 1; // каждая 2-я квартира — 2 собственника
 
             for (int u = 0; u < userCount; u++)
             {

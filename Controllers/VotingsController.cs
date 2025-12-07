@@ -31,8 +31,10 @@ public class VotingsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Voting>> CreateVoting(CreateVotingRequestDto request)
     {
-        if (request == null)
-            return BadRequest();
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
 
         // Создаём пустое голосование
         var voting = new Voting
@@ -41,8 +43,7 @@ public class VotingsController : ControllerBase
             QuestionPut = request.QuestionPut,
             ResponseOptions = request.ResponseOptions,
             StartTime = DateTime.UtcNow,
-            // TODO: заменить на передаваемую длительность
-            EndTime = DateTime.UtcNow.AddDays(7),
+            EndTime = DateTime.UtcNow.AddHours(request.DurationInHours),
             IsCompleted = false
         };
 
@@ -79,21 +80,32 @@ public class VotingsController : ControllerBase
     [HttpPost("{id}/vote")]
     public async Task<ActionResult> SubmitVote(Guid id, VoteRequestDto request)
     {
-        // 1. Найти голосование с владельцами
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        // 1. Найти голосование (без Include - сначала проверим, существует ли)
         var voting = await _context.Votings
-            .Include(v => v.OwnersList)
+            .Include(v => v.OwnersList) // <- Нужен для проверки All() и для поиска владельца
             .FirstOrDefaultAsync(v => v.Id == id);
 
         if (voting == null)
             return NotFound("Голосование не найдено");
 
-        // 2. Проверить, активно ли голосование
-        if (voting.IsCompleted || voting.EndTime < DateTime.UtcNow)
+        // 2. Проверить, активно ли голосование по флагу IsCompleted
+        if (voting.IsCompleted)
         {
             return BadRequest("Голосование уже завершено");
         }
 
-        // 3. Найти владельца с такими UserId и ApartmentId
+        // 3. Проверить, что request.Response есть в voting.ResponseOptions
+        if (!voting.ResponseOptions.Contains(request.Response))
+        {
+            return BadRequest($"Ответ '{request.Response}' не является допустимым вариантом для этого голосования.");
+        }
+
+        // 4. Найти владельца с такими UserId и ApartmentId
         var owner = voting.OwnersList
             .FirstOrDefault(o => o.UserId == request.UserId && o.ApartmentId == request.ApartmentId);
 
@@ -102,13 +114,13 @@ public class VotingsController : ControllerBase
             return BadRequest("Указанный пользователь не является владельцем в этой квартире");
         }
 
-        // 4. Проверить, что он ещё не голосовал
+        // 5. Проверить, что он ещё не голосовал
         if (!string.IsNullOrEmpty(owner.Response))
         {
             return BadRequest("Пользователь уже проголосовал");
         }
 
-        // 5. Вычислить TotalHouseArea для этого дома (в рамках этого голосования)
+        // 6. Вычислить TotalHouseArea для этого дома (в рамках этого голосования)
         var totalHouseArea = voting.OwnersList
             .Where(o => o.HouseId == owner.HouseId) // только из этого дома
             .Sum(o => o.ApartmentArea);
@@ -118,13 +130,16 @@ public class VotingsController : ControllerBase
             return BadRequest("Общая площадь дома не может быть нулевой");
         }
 
-        // 6. Рассчитать вес голоса
+        // 7. Рассчитать вес голоса
         owner.VoteWeight = (owner.ApartmentArea * owner.Share) / totalHouseArea;
 
-        // 7. Принять голос
+        // 8. Принять голос
         owner.Response = request.Response;
 
         await _context.SaveChangesAsync();
+
+        // 9. Проверить, все ли проголосовали, и если да — завершить голосование
+        await CheckAndSetVotingCompleted(voting);
 
         return Ok("Голос принят с весом: " + owner.VoteWeight);
     }
@@ -139,15 +154,8 @@ public class VotingsController : ControllerBase
         if (voting == null)
             return NotFound("Голосование не найдено");
 
-        // Проверим, завершено ли голосование:
-        // - Или флаг IsCompleted = true
-        // - Или время вышло
-        // - Или все собственники в этом голосовании уже проголосовали
-        bool isCompleted = voting.IsCompleted
-                        || voting.EndTime < DateTime.UtcNow
-                        || voting.OwnersList.All(o => !string.IsNullOrEmpty(o.Response));
-
-        if (!isCompleted)
+        // Проверим, завершено ли голосование: только по флагу IsCompleted
+        if (!voting.IsCompleted)
         {
             return BadRequest("Голосование ещё активно, результаты недоступны");
         }
@@ -191,23 +199,19 @@ public class VotingsController : ControllerBase
     {
         // 1. Найти голосование
         var voting = await _context.Votings
+            .Include(v => v.OwnersList)
             .FirstOrDefaultAsync(v => v.Id == id);
 
         if (voting == null)
             return NotFound("Голосование не найдено");
 
-        // 2. Проверить, завершено ли голосование
-        // (используем ту же логику, что и в GetVotingResults)
-        bool isCompleted = voting.IsCompleted
-                        || voting.EndTime < DateTime.UtcNow
-                        || voting.OwnersList.All(o => !string.IsNullOrEmpty(o.Response));
-
-        if (!isCompleted)
+        // 2. Проверить, завершено ли голосование по флагу IsCompleted
+        if (!voting.IsCompleted)
         {
-            return BadRequest("Голосование ещё активно, нельзя внести решение");
+            return BadRequest("Голосование ещё активно, нельзя вынести решение");
         }
 
-        // 3. Проверить, что решение не пустое (опционально)
+        // 3. Проверить, что решение не пустое
         if (string.IsNullOrWhiteSpace(decision))
         {
             return BadRequest("Решение не может быть пустым");
@@ -219,6 +223,38 @@ public class VotingsController : ControllerBase
         // 5. Сохранить изменения
         await _context.SaveChangesAsync();
 
-        return Ok("Решение внесено");
+        return Ok("Решение вынесено");
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> DeleteVoting(Guid id)
+    {
+        var voting = await _context.Votings
+            .Include(v => v.OwnersList)
+            .FirstOrDefaultAsync(v => v.Id == id);
+
+        if (voting == null)
+        {
+            return NotFound("Голосование не найдено");
+        }
+
+        // Удалить голосование. Каскадом удалятся все Owner.
+        _context.Votings.Remove(voting);
+        await _context.SaveChangesAsync();
+
+        return NoContent(); // 204 — успешно удалено
+    }
+
+    private async Task CheckAndSetVotingCompleted(Voting voting)
+    {
+        // Проверить, все ли проголосовали
+        bool allVoted = voting.OwnersList.All(o => !string.IsNullOrEmpty(o.Response));
+
+        if (allVoted && !voting.IsCompleted)
+        {
+            voting.IsCompleted = true;
+            _context.Votings.Update(voting); // Явно указываем, что сущность изменена
+            await _context.SaveChangesAsync();
+        }
     }
 }
