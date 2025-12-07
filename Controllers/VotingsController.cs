@@ -289,6 +289,27 @@ public class VotingsController : ControllerBase
         return Ok(votedVotings);
     }
 
+    [HttpGet("completed-without-decision")]
+    public async Task<ActionResult<List<UnresolvedVotingDto>>> GetCompletedVotingsWithoutDecision()
+    {
+        // Найти все голосования, где:
+        // - IsCompleted = true
+        // - Decision == null или пустое
+        var unresolvedVotings = await _context.Votings
+            .Where(v => v.IsCompleted && (string.IsNullOrEmpty(v.Decision)))
+            .Select(v => new UnresolvedVotingDto
+            {
+                VotingId = v.Id,
+                QuestionPut = v.QuestionPut,
+                StartTime = v.StartTime,
+                EndTime = v.EndTime,
+                IsCompleted = v.IsCompleted
+            })
+            .ToListAsync();
+
+        return Ok(unresolvedVotings);
+    }
+
     private async Task CheckAndSetVotingCompleted(Voting voting)
     {
         // Проверить, все ли проголосовали

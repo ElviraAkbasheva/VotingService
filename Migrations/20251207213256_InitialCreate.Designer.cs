@@ -13,7 +13,7 @@ using VotingService.Data;
 namespace VotingService.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251129215711_InitialCreate")]
+    [Migration("20251207213256_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -35,11 +35,23 @@ namespace VotingService.Migrations
                     b.Property<decimal>("ApartmentArea")
                         .HasColumnType("numeric");
 
+                    b.Property<long>("ApartmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("HouseId")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Response")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<decimal>("Share")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("VoteWeight")
                         .HasColumnType("numeric");
 
                     b.Property<Guid>("VotingId")
@@ -57,6 +69,9 @@ namespace VotingService.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Decision")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("EndTime")
                         .HasColumnType("timestamp with time zone");

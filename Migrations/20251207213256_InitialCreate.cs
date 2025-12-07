@@ -21,7 +21,8 @@ namespace VotingService.Migrations
                     ResponseOptions = table.Column<List<string>>(type: "text[]", nullable: false),
                     StartTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     EndTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    IsCompleted = table.Column<bool>(type: "boolean", nullable: false)
+                    IsCompleted = table.Column<bool>(type: "boolean", nullable: false),
+                    Decision = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -33,9 +34,13 @@ namespace VotingService.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ApartmentId = table.Column<long>(type: "bigint", nullable: false),
+                    HouseId = table.Column<long>(type: "bigint", nullable: false),
                     ApartmentArea = table.Column<decimal>(type: "numeric", nullable: false),
                     Share = table.Column<decimal>(type: "numeric", nullable: false),
                     Response = table.Column<string>(type: "text", nullable: false),
+                    VoteWeight = table.Column<decimal>(type: "numeric", nullable: false),
                     VotingId = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
