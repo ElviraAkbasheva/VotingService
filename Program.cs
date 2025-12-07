@@ -32,6 +32,7 @@ namespace VotingService
 
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+            builder.Services.AddHostedService<VotingExpirationService>();
 
             var app = builder.Build();
 

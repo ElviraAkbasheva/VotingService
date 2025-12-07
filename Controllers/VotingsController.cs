@@ -245,6 +245,50 @@ public class VotingsController : ControllerBase
         return NoContent(); // 204 — успешно удалено
     }
 
+    [HttpGet("user/{userId}/active")]
+    public async Task<ActionResult<List<UserVotingDto>>> GetUnvotedVotingsByUser(Guid userId)
+    {
+        // Найти все голосования, где:
+        // - пользователь есть в OwnersList
+        // - пользователь НЕ проголосовал (Response == "")
+        var unvotedVotings = await _context.Votings
+            .Include(v => v.OwnersList)
+            .Where(v => v.OwnersList.Any(o => o.UserId == userId && string.IsNullOrEmpty(o.Response)))
+            .Select(v => new UserVotingDto
+            {
+                VotingId = v.Id,
+                QuestionPut = v.QuestionPut,
+                EndTime = v.EndTime,
+                IsCompleted = v.IsCompleted,
+                Response = null // Не голосовал
+            })
+            .ToListAsync();
+
+        return Ok(unvotedVotings);
+    }
+
+    [HttpGet("user/{userId}/completed")]
+    public async Task<ActionResult<List<UserVotingDto>>> GetVotedVotingsByUser(Guid userId)
+    {
+        // Найти все голосования, где:
+        // - пользователь есть в OwnersList
+        // - пользователь УЖЕ проголосовал (Response != "")
+        var votedVotings = await _context.Votings
+            .Include(v => v.OwnersList)
+            .Where(v => v.OwnersList.Any(o => o.UserId == userId && !string.IsNullOrEmpty(o.Response)))
+            .Select(v => new UserVotingDto
+            {
+                VotingId = v.Id,
+                QuestionPut = v.QuestionPut,
+                EndTime = v.EndTime,
+                IsCompleted = v.IsCompleted,
+                Response = v.OwnersList.First(o => o.UserId == userId && !string.IsNullOrEmpty(o.Response)).Response
+            })
+            .ToListAsync();
+
+        return Ok(votedVotings);
+    }
+
     private async Task CheckAndSetVotingCompleted(Voting voting)
     {
         // Проверить, все ли проголосовали
